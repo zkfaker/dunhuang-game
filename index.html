@@ -6,7 +6,7 @@
     <title>莫高窟257窟数字密室</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { overflow: hidden; background: #000; }
+        body { overflow: hidden; background: #000; font-family: sans-serif; }
         canvas { 
             width: 100vw; 
             height: 100vh; 
@@ -15,10 +15,90 @@
             top: 0;
             left: 0;
         }
+
+        /* 控制按钮容器 - 底部 */
+        .controls-bottom {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            z-index: 999;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        /* 控制按钮容器 - 右侧旋转 */
+        .controls-right {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 999;
+        }
+
+        .control-btn {
+            padding: 14px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            transition: all 0.2s;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+
+        .control-btn:active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(0.95);
+        }
+
+        /* 提示文字 */
+        .hint {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255,255,255,0.7);
+            font-size: 14px;
+            z-index: 999;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
+    <div class="hint">鼠标拖动可旋转视角 | 按住按钮移动</div>
     <canvas id="canvas"></canvas>
+
+    <!-- 底部移动按钮 -->
+    <div class="controls-bottom">
+        <button class="control-btn" id="btn-up">上升</button>
+        <button class="control-btn" id="btn-left">左移</button>
+        <button class="control-btn" id="btn-forward">前进</button>
+        <button class="control-btn" id="btn-back">后退</button>
+        <button class="control-btn" id="btn-right">右移</button>
+        <button class="control-btn" id="btn-down">下降</button>
+    </div>
+
+    <!-- 右侧旋转按钮 -->
+    <div class="controls-right">
+        <button class="control-btn" id="btn-rotate-left">← 左转</button>
+        <button class="control-btn" id="btn-rotate-right">右转 →</button>
+    </div>
 
     <script type="importmap">
         {
@@ -35,12 +115,29 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
         let scene, camera, renderer, controls, model;
+        const clock = new THREE.Clock();
+        
+        // --- 移动参数 ---
+        const MOVE_SPEED = 5; // 移动速度
+        const ROTATE_SPEED = 1; // 旋转速度 (弧度/秒)
+        
+        // 状态管理
+        const state = {
+            moveForward: false,
+            moveBackward: false,
+            moveLeft: false,
+            moveRight: false,
+            moveUp: false,
+            moveDown: false,
+            rotateLeft: false,
+            rotateRight: false
+        };
 
         // 1. 场景初始化
         const canvas = document.getElementById('canvas');
         scene = new THREE.Scene();
 
-        // 2. 相机（用你之前的位置）
+        // 2. 相机（完全保留你的数据）
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 500);
         camera.position.set(-89.0, -3.0, -24.6);
 
@@ -56,16 +153,18 @@
         const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x222222, 1.8);
         scene.add(hemisphereLight);
 
-        // 5. 控制器（保留正面视角）
+        // 5. 控制器（完全保留你的数据）
         controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
-        controls.enableZoom = false;
+        controls.enableZoom = true;
         controls.enablePan = false;
         controls.minPolarAngle = 0.3;
         controls.maxPolarAngle = Math.PI - 0.3;
-        
-        // 【保留你找到的正面目标点】
         controls.target.set(-60, -2.8, -24.4);
+        
+        // 调整控制器灵敏度（保留原有功能）
+        controls.rotateSpeed = 0.02;
+        controls.zoomSpeed = 0.02;
 
         // 6. 加载模型
         const loader = new GLTFLoader();
@@ -89,9 +188,107 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // 8. 渲染循环
+        // --- 8. 绑定按钮事件 ---
+        function bindEvents() {
+            const mapping = [
+                ['btn-forward', 'moveForward'],
+                ['btn-back', 'moveBackward'],
+                ['btn-left', 'moveLeft'],
+                ['btn-right', 'moveRight'],
+                ['btn-up', 'moveUp'],
+                ['btn-down', 'moveDown'],
+                ['btn-rotate-left', 'rotateLeft'],
+                ['btn-rotate-right', 'rotateRight']
+            ];
+
+            mapping.forEach(([id, stateKey]) => {
+                const el = document.getElementById(id);
+                // 按下
+                const start = (e) => { e.preventDefault(); state[stateKey] = true; };
+                // 松开
+                const end = (e) => { e.preventDefault(); state[stateKey] = false; };
+
+                el.addEventListener('mousedown', start);
+                el.addEventListener('mouseup', end);
+                el.addEventListener('mouseleave', end);
+                el.addEventListener('touchstart', start, {passive: false});
+                el.addEventListener('touchend', end, {passive: false});
+            });
+        }
+        bindEvents();
+
+        // --- 9. 核心移动逻辑 ---
+        function updateMovement(delta) {
+            // 1. 计算移动方向向量
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+            
+            // 水平方向移动（忽略Y轴，防止前进时钻地或飞天）
+            const walkDir = dir.clone();
+            walkDir.y = 0;
+            walkDir.normalize();
+
+            // 右方向向量
+            const rightDir = new THREE.Vector3();
+            rightDir.crossVectors(new THREE.Vector3(0,1,0), walkDir).normalize();
+
+            const distance = MOVE_SPEED * delta;
+            let targetOffset = new THREE.Vector3(); // 控制器目标点的偏移量
+
+            // 处理前后左右
+            if (state.moveForward) {
+                camera.position.addScaledVector(walkDir, distance);
+                targetOffset.addScaledVector(walkDir, distance);
+            }
+            if (state.moveBackward) {
+                camera.position.addScaledVector(walkDir, -distance);
+                targetOffset.addScaledVector(walkDir, -distance);
+            }
+            if (state.moveLeft) {
+                camera.position.addScaledVector(rightDir, distance);
+                targetOffset.addScaledVector(rightDir, distance);
+            }
+            if (state.moveRight) {
+                camera.position.addScaledVector(rightDir, -distance);
+                targetOffset.addScaledVector(rightDir, -distance);
+            }
+
+            // 处理上下 (世界坐标Y轴)
+            if (state.moveUp) {
+                camera.position.y += distance;
+                targetOffset.y += distance;
+            }
+            if (state.moveDown) {
+                camera.position.y -= distance;
+                targetOffset.y -= distance;
+            }
+
+            // 同步更新控制器目标点（非常重要，保证旋转中心跟随你）
+            controls.target.add(targetOffset);
+
+            // 2. 处理原地旋转
+            if (state.rotateLeft || state.rotateRight) {
+                const angle = ROTATE_SPEED * delta * (state.rotateLeft ? 1 : -1);
+                
+                // 计算当前目标相对于相机的向量
+                const relTarget = new THREE.Vector3();
+                relTarget.subVectors(controls.target, camera.position);
+                
+                // 绕Y轴旋转这个向量
+                relTarget.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle);
+                
+                // 更新控制器目标
+                controls.target.copy(camera.position).add(relTarget);
+            }
+        }
+
+        // 10. 渲染循环
         function animate() {
             requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            updateMovement(delta);
+            
             controls.update();
             renderer.render(scene, camera);
         }
