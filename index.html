@@ -16,27 +16,27 @@
             left: 0;
         }
 
-        /* 控制按钮容器 - 底部 */
+        /* 控制按钮容器 - 底部（3行2列，功能配对同行） */
         .controls-bottom {
             position: fixed;
             bottom: 30px;
             left: 50%;
             transform: translateX(-50%);
-            display: flex;
+            display: grid;
+            grid-template-rows: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 12px;
             z-index: 999;
-            flex-wrap: wrap;
-            justify-content: center;
         }
 
-        /* 控制按钮容器 - 右侧旋转 */
+        /* 旋转按钮容器 - 右侧（上下改为同行） */
         .controls-right {
             position: fixed;
             right: 20px;
             top: 50%;
             transform: translateY(-50%);
             display: flex;
-            flex-direction: column;
+            flex-direction: row; /* 改为横向排列 */
             gap: 12px;
             z-index: 999;
         }
@@ -55,6 +55,7 @@
             user-select: none;
             -webkit-user-select: none;
             touch-action: manipulation;
+            min-width: 100px; /* 保证按钮宽度一致 */
         }
 
         .control-btn:hover {
@@ -84,17 +85,22 @@
     <div class="hint">鼠标拖动可旋转视角 | 按住按钮移动</div>
     <canvas id="canvas"></canvas>
 
-    <!-- 底部移动按钮 -->
+    <!-- 底部移动按钮（按功能配对排列） -->
     <div class="controls-bottom">
+        <!-- 第一行：上升 ↔ 下降 -->
         <button class="control-btn" id="btn-up">上升</button>
+        <button class="control-btn" id="btn-down">下降</button>
+        
+        <!-- 第二行：左移 ↔ 右移 -->
         <button class="control-btn" id="btn-left">左移</button>
+        <button class="control-btn" id="btn-right">右移</button>
+        
+        <!-- 第三行：前进 ↔ 后退 -->
         <button class="control-btn" id="btn-forward">前进</button>
         <button class="control-btn" id="btn-back">后退</button>
-        <button class="control-btn" id="btn-right">右移</button>
-        <button class="control-btn" id="btn-down">下降</button>
     </div>
 
-    <!-- 右侧旋转按钮 -->
+    <!-- 右侧旋转按钮（同行排列） -->
     <div class="controls-right">
         <button class="control-btn" id="btn-rotate-left">← 左转</button>
         <button class="control-btn" id="btn-rotate-right">右转 →</button>
@@ -118,7 +124,7 @@
         const clock = new THREE.Clock();
         
         // --- 移动参数 ---
-        const MOVE_SPEED = 5; // 移动速度
+        const MOVE_SPEED = 10; // 移动速度
         const ROTATE_SPEED = 1; // 旋转速度 (弧度/秒)
         
         // 状态管理
@@ -163,8 +169,8 @@
         controls.target.set(-60, -2.8, -24.4);
         
         // 调整控制器灵敏度（保留原有功能）
-        controls.rotateSpeed = 0.02;
-        controls.zoomSpeed = 0.02;
+        controls.rotateSpeed = 0.1;
+        controls.zoomSpeed = 0.1;
 
         // 6. 加载模型
         const loader = new GLTFLoader();
